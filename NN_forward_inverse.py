@@ -125,7 +125,7 @@ inverse_model.add(forward_model.layers[2])
 inverse_model.add(forward_model.layers[3])
 
 """
-fix the pre-trained forward layers
+fix the weights of the pre-trained forward layers
 """
 for layer in inverse_model.layers[4:]:
     layer.trainable = False
@@ -148,4 +148,4 @@ get_middle_layer_output = K.function([inverse_model.layers[0].input],
                                   [inverse_model.layers[3].output])
 layer_output = get_middle_layer_output([Y_test])[0]
 np.save("X_pred",layer_output)
-pre_model.save('inverse_model.h5')
+inverse_model.save('inverse_model.h5')
