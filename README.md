@@ -25,6 +25,7 @@ This project provides methods to model the interaction between two arrays of mag
 
 
 ## For Developers:
+**utils.py**             : core functions, including computation of interaction, encoding and decoding of magnetic array  configurations.
 
 **backtrack.py**         : Using backtrack/DFS to enumerate all possible interactions between two magnetic arrays.
 
