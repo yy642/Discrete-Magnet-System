@@ -1,3 +1,26 @@
+"""
+This code provides a method to solve the unknown x, y staisify the following set of equations:
+x^T A^k y = b^k (1)
+with k=1,2,...,N
+A_k, b_k are known matrices, and x, y are two vectors with vector elements ∈ {-1, 1}.
+The above quadratic problem can be linearized as:
+(a) convert X, Y to to binary variable:
+    let pi, qi ∈{0,1}, then the element of x and y can be represented using p and q
+    xi = 2pi - 1
+    yi = 2qi - 1
+(b) rewrite equation (1) as:
+   \sum_{i,j} x_i y_j A_{i,j}^k = \sum_{i, j} (1-2(pi xor qi)) A_{i,j}^k = b^k
+   Let w_{i,j} = pi xor qi, then the above equation can be linearzed as:
+   \sum_{i,j} (1-2w_{i,j})A_{i,j}^k = b^k
+   with a set of constriants:
+   w_{i,j} <= pi+qj
+   w_{i,j} >= pi-qj
+   w_{i,j} >= qj-pi
+   w_{i,j} <= 2-pi-qj
+"""
+
+
+
 import numpy as np
 import time
 from l2distance import l2distance
@@ -5,6 +28,8 @@ import numpy.random as random
 from utils import *
 from cvxopt.modeling import *
 from cvxpy import *
+
+
 
 def gen_problem(target, N, A, addnoise=True,sd=0.1):
     """
