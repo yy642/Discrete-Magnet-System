@@ -1,8 +1,14 @@
 # Discrete-Magnet-System
 ## Installation
-to install cvxpy
+To install `cvxpy` (if you have Anaconda),
 ```
-pip install cvxpy
+conda install -c conda-forge lapack
+conda install -c cvxgrp cvxpy
+```
+You can test the installation of `cvxpy` with `nose`:
+```
+conda install nose
+nosetests cvxpy
 ```
 ##
 This project provides methods to model the interaction between two arrays of magnetic dipole with {-1,1} representing the magnetic orientation for each dipole (-1 means north, 1 means south). 
