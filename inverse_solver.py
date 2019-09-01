@@ -30,49 +30,68 @@ from cvxopt.modeling import *
 from cvxpy import *
 
 
-
-def gen_problem(target, N, A, addnoise=True,sd=0.1):
+def opt(target, N, A, eps=100, maxiter=1):
     """
-    INPUT: 
-    target, a list of target values 
-    N, integer, the size of the target
-    A, a list of interaction tensors 
+    inverse solver
+    
+    INPUT:
+    target, 1D array of pes
+    N, the length of first dimenson of the square pad
+    A, the interaction tensor, the last dimension is the distance
+    eps, the error threshold
+    maxiter: the maximum number of iteration
     
     OUTPUT:
-    Pout, a N by 1 array
-    Qout, a N by 1 array
-    value, float, the difference between target and optimized results
+    two 1D array, represting two flattened pads
+    error, float number.
     """
     N2 = N * N
-    P = Variable((N2, 1),boolean=True)
-    Q = Variable((N2, 1),boolean=True)
+    P = Variable((N2, 1), boolean=True)
+    Q = Variable((N2, 1), boolean=True)
+    W = Variable((N2, N2))
     
-    W = []
+    P_T_matrix = vstack([P.T] * N2)
+    Q_matrix = hstack([Q] * N2)
+    
+    P_add_Q = P_T_matrix + Q_matrix
+    p_sub_Q = P_T_matrix - Q_matrix
+    
     constraint = []
     
-
-    for i in range(N2):
-        W.append(Variable((N2, 1)))
-        constraint.append(W[i] <= P[i] + Q)
-        constraint.append(W[i] >= P[i] - Q)
-        constraint.append(W[i] >= Q - P[i])
-        constraint.append(W[i] <= 2 - P[i] - Q)
-        
-        
-    objective = 0                   
+    constraint.append(W <=  P_add_Q)
+    constraint.append(W >=  p_sub_Q)
+    constraint.append(W >= -p_sub_Q)
+    constraint.append(W <= -P_add_Q + 2)
+     
+    objective = 0
+    
+    W_tmp = 1 - 2 * W
+    
     for d in range(len(target)):
-        O=0.0
-        for i in range(N2):
-
-            O += multiply(( 1 - 2 * W[i]), A[d][i].reshape(N2,1))
-           
-            
-        objective += sum_squares(sum(O) - target[d])
-
-                       
+        objective += sum_squares(sum(multiply(W_tmp, A[:,:,d])) - target[d])
+        
     prob = Problem(Minimize(objective), constraint)
+    err = 1000
+
+    
     prob.solve()
-    Qout = Q.value.round(1)
-    Pout = P.value.round(1)
-    value = prob.value
-    return Pout.reshape(-1)*2-1, Qout.reshape(-1)*2-1, value
+    err = prob.value
+    besterr = prob.value
+    bestQ = Q.value.round(1)
+    bestP = P.value.round(1)
+    iteration = 1
+    while (err > eps):
+        iteration += 1
+        if (iteration > maxiter): break
+        prob.solve(warm_start=True)
+        err = prob.value
+        if err > besterr:
+            besterr = err
+            bestQ = Q.value.round(1)
+            bestP = P.value.round(1)
+
+    print("err=",err, "iteration=", iteration)
+    return bestP.reshape(-1)*2-1, bestQ.reshape(-1)*2-1, besterr
+
+
+
