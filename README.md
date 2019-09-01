@@ -23,6 +23,9 @@ This project provides methods to model the interaction between two arrays of mag
 
 **NN_forward_inverse.py**: Using NN in keras/Tensorflow to model both foward and inverse problem.
 
+
+## For Developers:
+
 **backtrack.py**         : Using backtrack/DFS to enumerate all possible interactions between two magnetic arrays.
 
 **inverse_solver.py**    : Given the target interaction (force or energy), compute the configuration of magnetic arrays.
