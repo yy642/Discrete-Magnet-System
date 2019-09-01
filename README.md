@@ -7,6 +7,6 @@ This project provides methods to model the interaction between two arrays of mag
 
 (2) Given the target interaction (force or energy), compute the configuration of magnetic arrays, see inverse_solver.py
 
-(3) Using NN in keras/Tensorflow to model both foward and inverse problem, see
+(3) Using NN in keras/Tensorflow to model both foward and inverse problem, see NN_forward_inverse.py
 
 The example.ipynb contains the example of how to use core funcitons.
