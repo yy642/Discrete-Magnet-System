@@ -1,4 +1,10 @@
 # Discrete-Magnet-System
+## Installation
+to install cvxpy
+```
+pip install cvxpy
+```
+##
 This project provides methods to model the interaction between two arrays of magnetic dipole with {-1,1} representing the magnetic orientation for each dipole (-1 means north, 1 means south). 
 
 (1) compute the force and energy between given two magnetic arrays with {-1,1} representing the magnetic dipole orientations.
