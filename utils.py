@@ -35,12 +35,12 @@ def gen_magnet_pads(N, M=None, start=0, end=None):
     if M is None:
         M = N
 
-    assert(N*M <= 16)
+    assert(N*M < 25)
 
     if end is None:
         end = 2**(N*M)
-    index = np.arange(start, end, 1)    
-    arr = np.asarray([index >> i & 1 for i in range(N * M - 1,-1,-1)] )*2-1
+    index = np.arange(start, end, 1).astype('int32') 
+    arr = (np.asarray([index >> i & 1 for i in range(N * M - 1,-1,-1)] )*2-1).astype('int8')
     arr = np.swapaxes(arr, 0, 1)
     return arr    
 
@@ -282,8 +282,6 @@ def compute(pad1, poslist, pad2):
     1d array
     """    
     return np.dot((np.dot(pad1, poslist).T),pad2)
-#	return np.dot((np.dot(pad1, poslist)),pad2)
-#    return np.dot(np.dot(pad1, poslist).T, pad2)
 
 
 def computeAll(pads1, poslist, pads2 = None):
@@ -305,7 +303,22 @@ def computeAll(pads1, poslist, pads2 = None):
     B=np.swapaxes(B,0,1)
     return B
 
-
+def ComputeAll_2(pads1, poslist, pads2):
+    """
+    given two equal length pads, compute pes
+    INPUT:
+    pads1: a 2D array, shape of M by N^2
+    pads2: a 2D array, shape of M by N^2
+    poslist: a 3D array, M by M by D, where D is the dimension for distances 
+    OUTPUT:
+    B, a 3D array, M by D
+    """
+    assert len(pads1)==len(pads2)
+    _,_,D=poslist.shape
+    A = np.dot(pads1, poslist[:,:])
+    B = np.repeat(pads2[:, :, np.newaxis], D, axis=2)
+    B = np.sum(A * B, axis=1)
+    return B
 
 
 
