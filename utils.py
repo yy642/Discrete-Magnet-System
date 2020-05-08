@@ -1,6 +1,61 @@
 import numpy as np
-from l2distance import l2distance
-import itertools
+from numpy import linalg as LA
+def l2distance(X,Z=None):
+    # function D=l2distance(X,Z)
+    #
+    # Computes the Euclidean distance matrix.
+    # Syntax:
+    # D=l2distance(X,Z)
+    # Input:
+    # X: nxd data matrix with n vectors (rows) of dimensionality d
+    # Z: mxd data matrix with m vectors (rows) of dimensionality d
+    #
+    # Output:
+    # Matrix D of size nxm
+    # D(i,j) is the Euclidean distance of X(i,:) and Z(j,:)
+    #
+    # call with only one input:
+    # l2distance(X)=l2distance(X,X)
+    #
+
+    if Z is None:
+        Z=X;
+
+    n,d1=X.shape
+    m,d2=Z.shape
+    assert (d1==d2), "Dimensions of input vectors must match!"
+
+    def innerproduct(X,Z=None):
+        # function innerproduct(X,Z)
+        #
+        # Computes the inner-product matrix.
+        # Syntax:
+        # D=innerproduct(X,Z)
+        # Input:
+        # X: nxd data matrix with n vectors (rows) of dimensionality d
+        # Z: mxd data matrix with m vectors (rows) of dimensionality d
+        #
+        # Output:
+        # Matrix G of size nxm
+        # G[i,j] is the inner-product between vectors X[i,:] and Z[j,:]
+        #
+        # call with only one input:
+        # innerproduct(X)=innerproduct(X,X)
+        #
+        if Z is None: # case when there is only one input (X)
+            Z=X;
+        
+        G = np.dot(X, Z.T)
+     
+        return G
+    
+    preS = np.diag(innerproduct(X)).reshape(-1,1)
+    preR = np.diag(innerproduct(Z)).reshape(1,-1)
+    D2   = preS - 2 * innerproduct(X,Z) + preR
+    D    = np.sqrt(D2)
+    
+    return D2
+
 def get_magnet_pad(N, m, M=None):
     """
 	generate the mth pad in 2**(N*M) configurations
@@ -16,7 +71,7 @@ def get_magnet_pad(N, m, M=None):
     """
     if M is None:
         M = N
-    assert m < 2<<(N*M)
+    #assert m < 2<<(N*M)
     arr = np.asarray(list([m >> i & 1 for i in range(N * M - 1,-1,-1)] )) * 2 - 1
     return arr
 
@@ -40,6 +95,25 @@ def gen_magnet_pads(N, M=None, start=0, end=None):
     if end is None:
         end = 2**(N*M)
     index = np.arange(start, end, 1).astype('int32') 
+    arr = (np.asarray([index >> i & 1 for i in range(N * M - 1,-1,-1)] )*2-1).astype('int8')
+    arr = np.swapaxes(arr, 0, 1)
+    return arr    
+
+def gen_magnet_pads_from_index(N, index, M=None):
+    """
+	generate the all possible pad in 2**N*M configurations
+
+    INPUT:
+    N, integer, the first dimension of the pad
+    M, integer, the second dimension of the pad
+    start, integer, the start index of the pads, defalut 0
+    end, integer, the end index of the pads, defalut 2**(N*M)
+	OUTPUT:
+	arr, an num x (N*M) array, where num = end - start
+    """
+    if M is None:
+        M = N
+    #index = np.arange(start, end, 1).astype('int32') 
     arr = (np.asarray([index >> i & 1 for i in range(N * M - 1,-1,-1)] )*2-1).astype('int8')
     arr = np.swapaxes(arr, 0, 1)
     return arr    
@@ -230,8 +304,25 @@ def face_to_face_force_tensor(pos_2D, dlist):
         R_square = pos_2D + d_square
         pos_array = dlist[i] * (6.0 * d_square - 9.0 * pos_2D) / (R_square) ** 3.5
         pos_list[:,:,i] = pos_array
-    return pos_list 
+    return pos_list.astype('float32') 
 
+def face_to_face_force_derivative_tensor(pos_2D, dlist):
+    """ 
+    INPUT:
+    generate pariwise d(Rxi^2 + Ryj^2 + D^2)/dD between two identical N by N pads 
+    pos: N^2 by N^2 array
+    dlist: a list of distances
+    OUTPUT:
+    pos_list: a list of N^2 by N^2 array, ith array is pos + ith distance in dlist. 
+    """
+    L1, L2 = pos_2D.shape
+    pos_list = np.zeros([L1, L2, len(dlist)])
+    for i in range(len(dlist)):
+        d_square = dlist[i] * dlist[i]
+        R_square = pos_2D + d_square
+        pos_list[:,:,i] = -(9 * pos_2D * pos_2D - 72 * pos_2D * d_square + 24 * d_square**2) / (R_square) ** 4.5 
+
+    return pos_list.astype('float32') 
 
 def hinge_force_explicit(x1,y1,x2,y2,theta):
     """
@@ -271,17 +362,23 @@ def hinge_force_tensor(pos1, pos2, angle_list):
 
     return np.asfarray(pos_list,'float64')
 
-
-def compute(pad1, poslist, pad2):
-    """
+def Compute(pad1, Tensor, pad2):
+    """ 
     INPUT:
     pad1: a 1D array
     pad2: a 1D array
     poslist: a 3D array, M  by N by D, where D is the dimension for distances 
     OUTPUT:
     1d array
+    """   
+    return np.dot(np.dot(pad2,Tensor).T,pad1)
+
+def compute(pad1, poslist, pad2):
+    """
+    disactiviated, see Compute(pad1, Tensor, pad2)
     """    
-    return np.dot((np.dot(pad1, poslist).T),pad2)
+    print("disactiviated, see Compute(pad1, Tensor, pad2)")
+    return
 
 
 def computeAll(pads1, poslist, pads2 = None):
@@ -300,27 +397,7 @@ def computeAll(pads1, poslist, pads2 = None):
     A=np.tensordot(pads1, poslist,axes=([1],[0]))
     B=np.tensordot(A, pads2.T,axes=([1],[0]))
     B=np.swapaxes(B,1,2)
-    B=np.swapaxes(B,0,1)
     return B
-
-def ComputeAll_2(pads1, poslist, pads2):
-    """
-    given two equal length pads, compute pes
-    INPUT:
-    pads1: a 2D array, shape of M by N^2
-    pads2: a 2D array, shape of M by N^2
-    poslist: a 3D array, M by M by D, where D is the dimension for distances 
-    OUTPUT:
-    B, a 3D array, M by D
-    """
-    assert len(pads1)==len(pads2)
-    _,_,D=poslist.shape
-    A = np.dot(pads1, poslist[:,:])
-    B = np.repeat(pads2[:, :, np.newaxis], D, axis=2)
-    B = np.sum(A * B, axis=1)
-    return B
-
-
 
 
 def gen_3D_dipole(u):
@@ -353,11 +430,11 @@ def single_dipole_interaction(uA, uB, RA, RB):
     energy = 0.0
     for alpha in range(3):
         for beta in range(3):
-            energy += uA[alpha] * T_alpha_beta(R, alpha, beta) * uB[beta]
+            energy += uA[alpha] * Tensor_alpha_beta(RA,RB, alpha, beta) * uB[beta]
     return -1.0 * energy
 
 
-def Tensor_alpha_beta(pos1, pos2, theta_list):
+def T_alpha_beta(pos1, pos2, theta_list):
     """
     first dimension corresponds to theta_list
     last dimension are corresponding to xx, yy, zz, xy, xz, yz
@@ -392,4 +469,202 @@ def Tensor_alpha_beta(pos1, pos2, theta_list):
     
     return tensor_list
 
+def get_rotate_matrix(theta,alpha):
+    """
+    the rotation matrix along alpha axis
+    alpha: 0:x, 1:y, or 2:z
+    """
+    sin_ = np.sin(theta)
+    cos_ = np.cos(theta)
+    if alpha == 0:
+        return np.array([[1,0,0],
+                        [0,cos_,-sin_],
+                        [0,sin_,cos_]])
+    elif alpha == 1:
+        return np.array([[cos_, 0, -sin_],
+                    [0, 1, 0],
+                    [sin_, 0, cos_]])
+    elif alpha == 2:
+        return np.array([[cos_,-sin_,0],
+                       [sin_,cos_,0],
+                       [0,0,1]])
+    else :
+        print("invalid alpha")
+
+
+def get_dipole_force(r1, r2, m1, m2, mu0 = 1):
+    """
+    compute magnetic force felt by m1 located on r1
+    INPUT:
+    r1: 1D array with len 3, the (x,y,z) for magnet 1
+    r2: 1D array with len 3, the (x,y,z) for magnet 2
+    m1: 1D array with len 3, the (mu_x,mu_y,mu_z) for magnet 1
+    m2: 1D array with len 3, the (mu_x,mu_y,mu_z) for magnet 2
+    mu0: Vacuum permeability, default is set mu0 to be 1. 
+    if compared with experiment, reset mu0
+    OUTPUT:
+    force flet by m1, 1D array with len 3
+    """        
+    r = r1 - r2
+    rr = LA.norm(r) # the length of r
+    dr = r / rr # unit direction of r  
+    r_x_m1 = np.cross(dr, m1)
+    r_x_m2 = np.cross(dr, m2)
+    F = 3*mu0 /(4*np.pi*rr**4) * (np.cross(r_x_m1, m2) + np.cross(r_x_m2, m1) - 2 * dr * np.dot(m1, m2) + 5 * dr *(np.dot(r_x_m1, r_x_m2)))
+    return F
+
+def get_dp_dp_energy(r1, r2, m1, m2, mu0=1):
+    """
+    Energy between m1(located at r1) and m2(located at r2)
+    INPUT:
+    r1: 1D array with len 3, the (x,y,z) for magnet 1
+    r2: 1D array with len 3, the (x,y,z) for magnet 2
+    m1: 1D array with len 3, the (mu_x,mu_y,mu_z) for magnet 1
+    m2: 1D array with len 3, the (mu_x,mu_y,mu_z) for magnet 2
+    mu0: Vacuum permeability, default is set mu0 to be 1. 
+    if compared with experiment, reset mu0
+    OUTPUT:
+    interaction energy, 1D array with len 3
+
+    """
+    r = r1 - r2
+    rr = LA.norm(r) # the length of r
+    dr = r / rr # unit direction of r    
+    return -mu0/(4 * np.pi * rr**3) *(3 * np.dot(m1, dr) * np.dot(m2, dr) - np.dot(m1, m2))
+
+def B(r1, r_origin, m, mu0=1):
+    """
+    magnetic field at r1, generated by m located at r_origin, 
+    INPUT:
+    r1: 1D array with len 3, the (x,y,z) for magnet 1
+    r_origin: 1D array with len 3, the (x,y,z) for the test dipole
+    m: 1D array with len 3, the (mu_x,mu_y,mu_z) for magnet at r_origin 
+    mu0: Vacuum permeability, default is set mu0 to be 1. 
+    if compared with experiment, reset mu0
+    OUTPUT:
+    magnetic field at r1, 1D array with len 3
+
+    """
+    r = r1 - r_origin
+    rr = LA.norm(r) # the length of r
+    return mu0 / (4 * np.pi) * (3*r*np.dot(m, r)/rr**5 - m / rr**3)
+
+
+def get_torque(r, F):
+    return np.cross(r, F)
+
+def gen_hinge_xyz(N, M, d, dx=0, dy=0):
+    """
+    generate (x,y,z) coordinate for N by M grids (with z=0)
+    dx: absolute shift in x direction 
+    dy: absolute shift in y direction
+    d: grid space between adjacent magnets
+    """
+    xy=gen_xyz(N,M)
+    xyz = np.zeros([len(xy),3])
+    xyz[:,:2]=xy
+    xyz = (xyz * d )+ np.array([dx, dy, 0])
+    return xyz
+
+def hinge_energy_tensor(xyz1, xyz2, angles, mu0=1, Mdipole=1):
+    """
+    interaction energy tensor between two arrays of magnets located at xyz1, and xyz2
+    INPUT:
+    xyz1: 2D array (x,y,z) for pad1
+    xyz2: 2D array (x,y,z) for pad2
+    angles: 1D array, angle between two pads, by defulat, pad1 is rotated about y axis, and angle is how
+    much the pad1 is rotated
+    mu0: Vacuum permeability, default is set mu0 to be 1. 
+    if compared with experiment, reset mu0
+    Mdipole: the dipole strength of the magnet, default is 1, if compared with experiment, reset.
+    OUTPUT:
+    3d ARRAY.
+
+    """
+    tensor = np.zeros([len(xyz1),len(xyz2),len(angles)])
+    for i in range(len(angles)):
+        theta = angles[i] 
+        rot_y = get_rotate_matrix(theta, alpha=1) 
+ 
+        for j in range(len(xyz1)):
+            mu1 =  np.array([0,0,1]) * Mdipole
+            r1 = xyz1[j]
+            new_r1 = np.dot(r1, rot_y)
+            new_mu1 = np.dot(mu1, rot_y)
+            
+            for k in range(len(xyz2)):
+                mu2 =  np.array([0,0,1]) * Mdipole
+                r2 = xyz2[k]                                
+                tensor[j][k][i] = get_dp_dp_energy(new_r1, r2, new_mu1, mu2, mu0=mu0)
+    return tensor
+
+                
+def hinge_Fz_tensor(xyz1, xyz2, angles, mu0=1,Mdipole=1):
+    """
+    interaction force (in z direction) tensor between two arrays of magnets located at xyz1, and xyz2
+    INPUT:
+    xyz1: 2D array (x,y,z) for pad1
+    xyz2: 2D array (x,y,z) for pad2
+    angles: 1D array, angle between two pads, by defulat, pad1 is rotated about y axis, and angle is how
+    much the pad1 is rotated
+    mu0: Vacuum permeability, default is set mu0 to be 1. 
+    if compared with experiment, reset mu0
+    Mdipole: the dipole strength of the magnet, default is 1, if compared with experiment, reset.
+    OUTPUT:
+    3d ARRAY.
+
+    """
+
+    tensor = np.zeros([len(xyz1),len(xyz2),len(angles)])
+    for i in range(len(angles)):
+        theta = angles[i] 
+        rot_y = get_rotate_matrix(theta, alpha=1) 
+        for j in range(len(xyz1)):
+            mu1 =  np.array([0,0,1]) * Mdipole
+            r1 = xyz1[j]
+            new_r1 = np.dot(r1, rot_y)
+            new_mu1 = np.dot(mu1, rot_y)
+            for k in range(len(xyz2)):
+                mu2 =  np.array([0,0,1]) * Mdipole
+                r2 = xyz2[k]   
+                F2 =  get_dipole_force(r2, new_r1, mu2, new_mu1, mu0=mu0) # force on r2
+                tensor[j][k][i] = F2[-1]
+    return tensor
+
+                
+def hinge_tau_tensor(xyz1, xyz2, angles, mu0=1,Mdipole=1):
+    """
+    total tau
+    interaction torque tensor between two arrays of magnets located at xyz1, and xyz2
+    tau includes two terms: rxF and mxB
+    INPUT:
+    xyz1: 2D array (x,y,z) for pad1
+    xyz2: 2D array (x,y,z) for pad2
+    angles: 1D array, angle between two pads, by defulat, pad1 is rotated about y axis, and angle is how
+    much the pad1 is rotated
+    mu0: Vacuum permeability, default is set mu0 to be 1. 
+    if compared with experiment, reset mu0
+    Mdipole: the dipole strength of the magnet, default is 1, if compared with experiment, reset.
+    OUTPUT:
+    3d ARRAY.
+
+    """
+    tensor = np.zeros([len(xyz1),len(xyz2),len(angles)])
+    for i in range(len(angles)):
+        theta = angles[i] 
+        rot_y = get_rotate_matrix(theta, alpha=1) 
+        for j in range(len(xyz1)):
+            mu1 =  np.array([0,0,1]) * Mdipole
+            r1 = xyz1[j]
+            new_r1 = np.dot(r1, rot_y)
+            new_mu1 = np.dot(mu1, rot_y)
+            for k in range(len(xyz2)):
+                mu2 =  np.array([0,0,1]) * Mdipole
+                r2 = xyz2[k]   
+                F1 =  get_dipole_force(new_r1, r2, new_mu1, mu2, mu0=mu0) # force on r1
+                t1 = get_torque(new_r1, F1) # torque on r1
+                B_ = B(new_r1, r2, mu2, mu0=mu0)# magnetic field generated by mu2 at new_r1:        
+                t2 = get_torque(new_mu1, B_)# torque on r1 from field 
+                tensor[j][k][i] = t1[1] + t2[1]
+    return tensor
 
